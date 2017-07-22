@@ -43,13 +43,31 @@ namespace VimHelper
      
         public static string BaseDataDir;
        
-        public static string VimHelperDb { 
+        public static string CodeDb { 
             get {
-                return Path.Combine(BaseDataDir, "Ziggy.sqlite");
+                return Path.Combine(BaseDataDir, "Code.sqlite");
             }
 
             private set {}
         }
+
+        public static void Log(object obj,
+            [CallerFilePath] string file = "",
+            [CallerMemberName] string member = "",
+            [CallerLineNumber] int line = 0)
+        {
+            Console.WriteLine("{0}_{1}({2}): {3}", Path.GetFileName(file), member, line, obj.ToString());
+        }        
+
+#if false
+        public static void Log(string text,
+            [CallerFilePath] string file = "",
+            [CallerMemberName] string member = "",
+            [CallerLineNumber] int line = 0)
+        {
+            Console.WriteLine("{0}_{1}({2}): {3}", Path.GetFileName(file), member, line, text);
+        }
+#endif        
     }
     
     public class CodeFile
@@ -81,14 +99,6 @@ namespace VimHelper
     
     class Program
     {
-        static void Log(string text,
-            [CallerFilePath] string file = "",
-            [CallerMemberName] string member = "",
-            [CallerLineNumber] int line = 0)
-        {
-            Console.WriteLine("{0}_{1}({2}): {3}", Path.GetFileName(file), member, line, text);
-        }
-
         static string[] Args;
 
         static void LoadAssemblyWithReferenced(string fullName)
@@ -114,7 +124,7 @@ namespace VimHelper
 
         static void Main(string[] args)
         {
-            Log($"{System.DateTime.Now.ToString("yyyy-MM-ddTHH:mm:ss.fff")}");
+            App.Log($"{System.DateTime.Now.ToString("yyyy-MM-ddTHH:mm:ss.fff")}");
 
             ///
             App.BasePath = PlatformServices.Default.Application.ApplicationBasePath; 
@@ -122,13 +132,11 @@ namespace VimHelper
             App.Version  = PlatformServices.Default.Application.ApplicationVersion; 
             App.BuildDate = File.ReadAllLines(Path.Combine(App.BasePath, "TimeBuilt.txt")).First();
 
-            App.BaseDataDir = Path.Combine(Directory.GetDirectoryRoot(App.BasePath), ".");
-
-            Console.WriteLine($"{App.BuildDate}: {Path.Combine(App.BasePath, App.Name)}");
+            App.BaseDataDir = App.BasePath;
 
             ///
             var connections = new List<Tuple<string, string>>() {
-                    new Tuple<string, string>( $"Data Source={App.VimHelperDb};", "CodeFile" ),
+                    new Tuple<string, string>( $"Data Source={App.CodeDb};", "CodeDb" ),
             };
 
             foreach (var connection in connections) {
@@ -147,7 +155,7 @@ namespace VimHelper
 
                 if (false == result.Successful) {
                     // Console.ForegroundColor = ConsoleColor.Red;
-                    Console.WriteLine(result.Error);
+                    App.Log(result.Error);
                     // Console.ResetColor();
                     System.Environment.Exit(1);
                 }
@@ -234,7 +242,7 @@ namespace VimHelper
 
             AllVariables();
 
-            Log($"{System.DateTime.Now.ToString("yyyy-MM-ddTHH:mm:ss.fff")}");                
+            App.Log($"{System.DateTime.Now.ToString("yyyy-MM-ddTHH:mm:ss.fff")}");                
         }
 
         static void Compile(List<Assembly> assemblies, IEnumerable<PortableExecutableReference> references) {
@@ -357,30 +365,34 @@ namespace VimHelper
             var tree = doc.GetSyntaxTreeAsync().Result;
             var model = doc.GetSemanticModelAsync().Result;
             
-            var methodBody = tree.GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>().Single().Body;
-            var result = model.AnalyzeDataFlow(methodBody);
+            foreach (var method in tree.GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>()) {
+                var methodBody = method.Body;
+                var result = model.AnalyzeDataFlow(methodBody);
 
-            var variableDeclarationAndUsages = result.VariablesDeclared.
-                Union(result.ReadInside).
-                Union(result.ReadOutside);
+                Console.WriteLine(methodBody.GetText());
 
-            foreach (var v in variableDeclarationAndUsages) {                
-                foreach (var l in v.Locations) {
-                    Console.WriteLine($"{l.SourceSpan.Start} {v.ToString()}");
-                    FindSymbolAtOffset(l.SourceSpan.Start);
-                }
-            }           
+                var variableDeclarationAndUsages = result.VariablesDeclared.
+                    Union(result.ReadInside).
+                    Union(result.ReadOutside);
 
-            foreach (var v in Project.compilation.GlobalNamespace.GetTypeMembers()) {                              
-                foreach (var member in v.GetMembers())
-                {
-                    foreach (var location in member.Locations) {
-                        if (location.IsInSource) {
-                            Console.WriteLine(member.ToString());
+                foreach (var v in variableDeclarationAndUsages) {                
+                    foreach (var l in v.Locations) {
+                        Console.WriteLine($"{l.SourceSpan.Start} {v.ToString()}");
+                        FindSymbolAtOffset(l.SourceSpan.Start);
+                    }
+                }           
+
+                foreach (var v in Project.compilation.GlobalNamespace.GetTypeMembers()) {                              
+                    foreach (var member in v.GetMembers())
+                    {
+                        foreach (var location in member.Locations) {
+                            if (location.IsInSource) {
+                                Console.WriteLine(member.ToString());
+                            }
                         }
                     }
                 }
-            }            
+            }
         }
 
         public static Assembly CurrentDomain_AssemblyResolve(object sender, ResolveEventArgs args)
