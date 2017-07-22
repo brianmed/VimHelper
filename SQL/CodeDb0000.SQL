@@ -1,10 +1,9 @@
 CREATE TABLE code_file (
   code_file_id INTEGER PRIMARY KEY AUTOINCREMENT, 
-  code_file_path VARCHAR(128) NOT NULL UNI, 
-  code_file_inserted VARCHAR(26) NOT NULL DEFAULT (STRFTIME('%Y-%m-%d %H:%M:%f', 'NOW')), 
-  code_file_updated VARCHAR(26) NOT NULL DEFAULT (STRFTIME('%Y-%m-%d %H:%M:%f', 'NOW'))
+  code_file_path VARCHAR(128) NOT NULL UNIQUE, 
+  code_file_updated VARCHAR(26) NOT NULL DEFAULT (STRFTIME('%Y-%m-%d %H:%M:%f', 'NOW')),
+  code_file_inserted VARCHAR(26) NOT NULL DEFAULT (STRFTIME('%Y-%m-%d %H:%M:%f', 'NOW')) 
 );
-CREATE UNIQUE INDEX uidx_code_file_code_file_path ON code_file (code_file_path);
 
 CREATE TRIGGER IF NOT EXISTS [UpdatedCodeFile]
     AFTER UPDATE
@@ -27,10 +26,10 @@ CREATE TABLE offset (
 
   offset_types_and_things VARCHAR(655360), -- enough for anybody
 
-  offset_inserted VARCHAR(26) NOT NULL DEFAULT (STRFTIME('%Y-%m-%d %H:%M:%f', 'NOW')), 
   offset_updated VARCHAR(26) NOT NULL DEFAULT (STRFTIME('%Y-%m-%d %H:%M:%f', 'NOW')),
+  offset_inserted VARCHAR(26) NOT NULL DEFAULT (STRFTIME('%Y-%m-%d %H:%M:%f', 'NOW')), 
 
-  FOREIGN KEY(offset_code_file_id) REFERENCES code_file(code_file_id)
+  FOREIGN KEY(offset_code_file_id) REFERENCES code_file(code_file_id) ON DELETE CASCADE ON UPDATE CASCADE
 );
 
 CREATE TRIGGER IF NOT EXISTS [UpdatedOffset]

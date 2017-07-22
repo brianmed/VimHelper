@@ -43,7 +43,8 @@ namespace VimHelper
      
         public static string BaseDataDir;
        
-        public static string CodeDb { 
+        public static string CodeDb
+        { 
             get {
                 return Path.Combine(BaseDataDir, "Code.sqlite");
             }
@@ -58,18 +59,9 @@ namespace VimHelper
         {
             Console.WriteLine("{0}_{1}({2}): {3}", Path.GetFileName(file), member, line, obj.ToString());
         }        
-
-#if false
-        public static void Log(string text,
-            [CallerFilePath] string file = "",
-            [CallerMemberName] string member = "",
-            [CallerLineNumber] int line = 0)
-        {
-            Console.WriteLine("{0}_{1}({2}): {3}", Path.GetFileName(file), member, line, text);
-        }
-#endif        
     }
     
+    [Alias("code_file")]
     public class CodeFile
     {
         [AutoIncrement]
@@ -79,13 +71,31 @@ namespace VimHelper
         [Alias("code_file_path")]
         public string Path { get; set; }
         
-        [Alias("code_file_types_and_things")]
-        public string TypesAndThings { get; set; }
-
         [Alias("code_file_updated")]
         public DateTime Updated { get; set; }
 
         [Alias("code_file_inserted")]
+        public DateTime Inserted { get; set; }
+    }
+
+    [Alias("offset")]
+    public class Offset
+    {
+        [AutoIncrement]
+        [Alias("offset_id")]
+        public long Id { get; set; }
+        
+      	[ForeignKey(typeof(CodeFile), OnDelete = "CASCADE", OnUpdate = "CASCADE")]
+        [Alias("offset_code_file_id")]
+        public long CodeFileId { get; set; }
+
+        [Alias("offset_types_and_things")]
+        public string TypesAndThings { get; set; }
+
+        [Alias("offset_updated")]
+        public DateTime Updated { get; set; }
+
+        [Alias("offset_inserted")]
         public DateTime Inserted { get; set; }
     }
     
@@ -238,7 +248,6 @@ namespace VimHelper
                 .Select(l => MetadataReference.CreateFromFile(l));
 
             Compile(Project.assemblies, references);
-            FindSymbolAtOffset(int.Parse(Args[1]));
 
             AllVariables();
 
@@ -269,10 +278,10 @@ namespace VimHelper
             }   
         }
         
-        static void FindSymbolAtOffset(int offset)
+        static void FindSymbolAtOffset(string path, int offset)
         {
 
-            var doc = Project.ws.GetDocument(Args[0]);
+            var doc = Project.ws.GetDocument(path);
             var model = doc.GetSemanticModelAsync().Result;
 
             var symbol = Microsoft.CodeAnalysis.FindSymbols.SymbolFinder.FindSymbolAtPositionAsync(model, offset, Project.ws).Result;
@@ -377,21 +386,10 @@ namespace VimHelper
 
                 foreach (var v in variableDeclarationAndUsages) {                
                     foreach (var l in v.Locations) {
-                        Console.WriteLine($"{l.SourceSpan.Start} {v.ToString()}");
-                        FindSymbolAtOffset(l.SourceSpan.Start);
+                        // Console.WriteLine($"{l.SourceSpan.Start} {v.ToString()}");
+                        FindSymbolAtOffset(Args[0], l.SourceSpan.Start);
                     }
                 }           
-
-                foreach (var v in Project.compilation.GlobalNamespace.GetTypeMembers()) {                              
-                    foreach (var member in v.GetMembers())
-                    {
-                        foreach (var location in member.Locations) {
-                            if (location.IsInSource) {
-                                Console.WriteLine(member.ToString());
-                            }
-                        }
-                    }
-                }
             }
         }
 
