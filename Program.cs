@@ -23,12 +23,54 @@ using Microsoft.CodeAnalysis.Scripting.Hosting;
 using Microsoft.Extensions.Configuration;
 using Roslyn;
 
+using Microsoft.Extensions.PlatformAbstractions;
+
 using System.Runtime.CompilerServices;
 
 using ServiceStack.Text;
+using ServiceStack.OrmLite;
+using ServiceStack.DataAnnotations;
+using DbUp;
 
 namespace VimHelper
 {
+    public static class App
+    {
+        public static string BasePath;
+        public static string Name;
+        public static string Version;
+        public static string BuildDate;
+     
+        public static string BaseDataDir;
+       
+        public static string VimHelperDb { 
+            get {
+                return Path.Combine(BaseDataDir, "Ziggy.sqlite");
+            }
+
+            private set {}
+        }
+    }
+    
+    public class CodeFile
+    {
+        [AutoIncrement]
+        [Alias("code_file_id")]
+        public long Id { get; set; }
+        
+        [Alias("code_file_path")]
+        public string Path { get; set; }
+        
+        [Alias("code_file_types_and_things")]
+        public string TypesAndThings { get; set; }
+
+        [Alias("code_file_updated")]
+        public DateTime Updated { get; set; }
+
+        [Alias("code_file_inserted")]
+        public DateTime Inserted { get; set; }
+    }
+    
     static class Project {
         public static OmniSharpWorkspace ws { get; set; }
 
@@ -74,8 +116,45 @@ namespace VimHelper
         {
             Log($"{System.DateTime.Now.ToString("yyyy-MM-ddTHH:mm:ss.fff")}");
 
-            Args = args;
+            ///
+            App.BasePath = PlatformServices.Default.Application.ApplicationBasePath; 
+            App.Name = PlatformServices.Default.Application.ApplicationName;      
+            App.Version  = PlatformServices.Default.Application.ApplicationVersion; 
+            App.BuildDate = File.ReadAllLines(Path.Combine(App.BasePath, "TimeBuilt.txt")).First();
 
+            App.BaseDataDir = Path.Combine(Directory.GetDirectoryRoot(App.BasePath), ".");
+
+            Console.WriteLine($"{App.BuildDate}: {Path.Combine(App.BasePath, App.Name)}");
+
+            ///
+            var connections = new List<Tuple<string, string>>() {
+                    new Tuple<string, string>( $"Data Source={App.VimHelperDb};", "CodeFile" ),
+            };
+
+            foreach (var connection in connections) {
+                var upgrader = DeployChanges.To
+                    .SQLiteDatabase(connection.Item1)
+                    .WithScriptsEmbeddedInAssemblies(new[]
+                    {
+                        Assembly.GetExecutingAssembly(),
+                    },
+                    (string s) => s.StartsWith(connection.Item2))
+                    .WithTransaction()
+                    // .LogToConsole()
+                    .Build();
+
+                DbUp.Engine.DatabaseUpgradeResult result = upgrader.PerformUpgrade();
+
+                if (false == result.Successful) {
+                    // Console.ForegroundColor = ConsoleColor.Red;
+                    Console.WriteLine(result.Error);
+                    // Console.ResetColor();
+                    System.Environment.Exit(1);
+                }
+            }
+            ///
+
+            Args = args;
             Project.assemblies = new List<Assembly>();
 
             if ("--depFile" == Args[0]) {
@@ -129,7 +208,7 @@ namespace VimHelper
                         LoadAssemblyWithReferenced("System.Console, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null");
                     }
 
-                    // For base stuff, I believe
+                    // For base stuff, I believe (maybe unnecessary)
                     LoadAssemblyWithReferenced("mscorlib, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null");
                     LoadAssemblyWithReferenced((Type.GetType("System.Int32").Assembly.FullName));                    
                 }
