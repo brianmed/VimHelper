@@ -39,4 +39,6 @@ Thumbs.db
 #dotCover
 *.dotCover
 
+.vscode
+
 TimeBuilt.txt
