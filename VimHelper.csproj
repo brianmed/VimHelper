@@ -10,12 +10,14 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="Microsoft.Data.SQLite" Version="*" />
     <PackageReference Include="Microsoft.Extensions.PlatformAbstractions" Version="1.1.0" />
     <PackageReference Include="Microsoft.CodeAnalysis" Version="2.3.0" />
     <PackageReference Include="Microsoft.CodeAnalysis.Scripting" Version="2.3.0" />
     <PackageReference Include="Microsoft.Extensions.Configuration" Version="1.1.2" />
     <PackageReference Include="ServiceStack.Text.Core" Version="1.0.43" />
     <PackageReference Include="ServiceStack.OrmLite.Core" Version="1.0.43" />
+    <PackageReference Include="ServiceStack.OrmLite.Sqlite.Core" Version="1.0.43" />
     <PackageReference Include="DbUp4-SQLite" Version="4.0.0-beta0003" />
     <PackageReference Include="DbUp4-core" Version="4.0.0-beta0003" />
   </ItemGroup>

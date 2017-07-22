@@ -49,8 +49,7 @@ namespace VimHelper
             Assemblies = new List<Assembly>();  
 
             AppDomain.CurrentDomain.AssemblyResolve += 
-                        CurrentDomain_AssemblyResolve;
-                      
+                        CurrentDomain_AssemblyResolve;                      
         }
 
         public void PopulateReferences()
@@ -172,9 +171,33 @@ namespace VimHelper
                 }, 
                 true);
 
+            var codeFile = new CodeFileTable {
+                Path = App.Args[0],
+            };
+
             ShowStatic(t);
             ShowProperties(t);
             ShowMethods(t);
+        }
+
+        public class FieldOrProperty
+        {
+            public bool IsStatic { get; set; }
+
+            public string ReturnType { get; set; }
+
+            public string Name { get; set; }
+        }
+
+        public class Method
+        {
+            public bool IsStatic { get; set; }
+
+            public string ReturnType { get; set; }
+
+            public string[] Parameters { get; set; }
+
+            public string Name { get; set; }
         }
 
         public void ShowStatic(Type type) {
