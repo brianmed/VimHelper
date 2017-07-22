@@ -39,6 +39,4 @@ Thumbs.db
 #dotCover
 *.dotCover
 
-imap_log.txt
-
-srcImap
+TimeBuilt.txt

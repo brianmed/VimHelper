@@ -28,7 +28,7 @@
     <EmbeddedResource Include="SQL/CodeFile0000.SQL" />
   </ItemGroup>
 
-  <Target Name="BuildTimeStampTarget" BeforeTargets="Build">
+  <Target Name="BuildTimeStampTarget" BeforeTargets="Compile">
     <Exec Command="date '+%FT%T' &gt; TimeBuilt.txt" />
   </Target>
 </Project>
