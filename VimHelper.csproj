@@ -10,13 +10,11 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.Data.Sqlite" Version="2.0.0-preview2-final" />
     <PackageReference Include="Microsoft.Extensions.PlatformAbstractions" Version="1.1.0" />
     <PackageReference Include="Microsoft.CodeAnalysis" Version="2.3.0" />
     <PackageReference Include="Microsoft.CodeAnalysis.Scripting" Version="2.3.0" />
     <PackageReference Include="Microsoft.Extensions.Configuration" Version="1.1.2" />
     <PackageReference Include="ServiceStack.Text.Core" Version="1.0.43" />
-    <PackageReference Include="ServiceStack.OrmLite.Sqlite.Core" Version="1.0.43" />
   </ItemGroup>
 
   <ItemGroup>
@@ -25,5 +23,9 @@
 
   <Target Name="BuildTimeStampTarget" BeforeTargets="Compile">
     <Exec Command="date '+%FT%T' &gt; TimeBuilt.txt" />
+  </Target>
+
+  <Target Name="BuildTimeStampTarget" AfterTargets="Build">
+    <Exec Command="date '+%FT%T'" />
   </Target>
 </Project>

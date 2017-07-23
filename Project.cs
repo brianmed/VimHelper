@@ -28,14 +28,48 @@ using Microsoft.Extensions.PlatformAbstractions;
 using System.Runtime.CompilerServices;
 
 using ServiceStack.Text;
-using ServiceStack.OrmLite;
-using ServiceStack.DataAnnotations;
 
 namespace VimHelper
 {
+    public class Symbol
+    {
+        public string SymbolName { get; set; }
+
+        public string TypeName { get; set; }
+
+        public AssemblyName AssemblyName { get; set; }
+    }
+
+    public class OffsetProperty
+    {
+        public bool IsStatic { get; set; }
+
+        public string PropertyType { get; set; }
+
+        public string Name { get; set; }
+    }
+
+    public class OffsetParamter
+    {
+        public string Name { get; set; }
+
+        public string TypeName { get; set; }
+    }
+
+    public class OffsetMethod
+    {
+        public bool IsStatic { get; set; }
+
+        public string ReturnType { get; set; }
+
+        public OffsetParamter[] Parameters { get; set; }
+
+        public string Name { get; set; }
+    }
+
     public class Project
     {
-        public OmniSharpWorkspace Ws { get; set; }
+        public List<string> SourceFiles { get; set; }
 
         public Compilation Compilation { get; set; }
 
@@ -47,8 +81,7 @@ namespace VimHelper
         {
             Assemblies = new List<Assembly>();  
 
-            AppDomain.CurrentDomain.AssemblyResolve += 
-                        CurrentDomain_AssemblyResolve;                      
+            SourceFiles = new List<string>();
         }
 
         public void PopulateReferences()
@@ -60,9 +93,9 @@ namespace VimHelper
                 .Select(l => MetadataReference.CreateFromFile(l));
         }
         
-        public void AllVariables()        
+        public void AllLocalVariables(OmniSharpWorkspace ws, string sourceFile)        
         {
-            var doc = Ws.GetDocument(App.Args[0]);
+            var doc = ws.GetDocument(sourceFile);
             var tree = doc.GetSyntaxTreeAsync().Result;
             var model = doc.GetSemanticModelAsync().Result;
             
@@ -77,11 +110,83 @@ namespace VimHelper
                 foreach (var v in variableDeclarationAndUsages) {                
                     foreach (var l in v.Locations) {
                         // Console.WriteLine($"{l.SourceSpan.Start} {v.ToString()}");
-                        FindSymbolAtOffset(App.Args[0], l.SourceSpan.Start);
+                        FindSymbolAtOffset(ws, sourceFile, l.SourceSpan.Start);
                     }
                 }           
             }
         }            
+
+        public void ProcessDepsFile(string depsFile)
+        {
+            var assets = JsonObject.Parse(File.ReadAllText(depsFile));
+
+            var targets = JsonObject.Parse(assets.Child("targets"));
+            var assemblyFullNames = new Dictionary<string, string>();
+            var assemblyFileNames = new Dictionary<string, string>();
+
+            var libraries = JsonObject.Parse(assets.Child("libraries"));
+
+            foreach (var target in targets) {
+                // Console.WriteLine(target.Key);
+
+                var things = JsonObject.Parse(target.Value);
+                foreach (var thing in things) {
+                    var blobs = JsonObject.Parse(thing.Value);
+                    // System.Private.CoreLib, Version=4.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e
+                    foreach (var blob in blobs) {
+                        if ("dependencies" == blob.Key) {
+                            foreach (var deps in JsonObject.Parse(blob.Value)) {                                    
+                                var libKey = $"{deps.Key}/{deps.Value}";
+                            
+                                if ("{}" == things.Child(libKey)) {
+                                    continue;
+                                }
+
+                                if (assemblyFullNames.ContainsKey(libKey)) {
+                                    continue;
+                                }
+
+                                if (blobs.Keys.Contains("runtime")) {
+                                    var runtime = JsonObject.Parse(blobs.Child("runtime"));
+                                    
+                                    var path = $"{thing.Key}/{runtime.First().Key}";
+
+                                    assemblyFileNames.Add(libKey, path);
+                                }
+
+                                // Console.WriteLine(libKey);
+
+                                var assemblyName = new AssemblyName();
+                                assemblyName.Name = deps.Key;
+
+                                var version = (deps.Value.Contains('-') ? deps.Value.Split('-')[0] : deps.Value).Split('.').ToList();
+                                assemblyName.Version = Version.Parse(String.Join(".", version.ToArray()));
+
+                                if (libraries.Keys.Contains(libKey)) {                                        
+                                    // assemblyFullNames.Add(libKey, $"{deps.Key}, Version={String.Join('.', version)}, Culture=neutral, PublicKeyToken=null");
+                                    assemblyFullNames.Add(libKey, $"{deps.Key}, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null");
+                                }
+                            }
+                        }
+                    }
+                }
+
+                foreach (var fullName in assemblyFullNames.OrderBy(v => v.Key)) {
+                    if (assemblyFileNames.ContainsKey(fullName.Key)) {
+                        App.Project.LoadAssemblyWithReferenced(fullName.Value, assemblyFileNames[fullName.Key]);
+                    } else {
+                        App.Project.LoadAssemblyWithReferenced(fullName.Value);
+                    }                        
+
+                    App.Project.LoadAssemblyWithReferenced("System, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null");
+                    App.Project.LoadAssemblyWithReferenced("System.Console, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null");
+                }
+
+                // For base stuff, I believe (maybe unnecessary)
+                App.Project.LoadAssemblyWithReferenced("mscorlib, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null");
+                App.Project.LoadAssemblyWithReferenced((Type.GetType("System.Int32").Assembly.FullName));                    
+            }            
+        }
 
         public void LoadAssemblyWithReferenced(string fullName, string path = null)
         {
@@ -109,17 +214,30 @@ namespace VimHelper
             }
         }
 
-        public void Compile() {
-            Ws = new OmniSharpWorkspace();
+        public void AddDocument(string fullPath)
+        {
+            SourceFiles.Add(fullPath);   
+        }
 
-            var version = new VersionStamp();
-            var id = ProjectId.CreateNewId();
+        public OmniSharpWorkspace AdhocWorkspace()
+        {
+            var ws = new OmniSharpWorkspace();
+            var projectId = ProjectId.CreateNewId();
+            
+            ws.AddProject(ProjectInfo.Create(projectId, new VersionStamp(), "Joy", "Joy", LanguageNames.CSharp, metadataReferences: References));
 
-            var projectInfo = ProjectInfo.Create(id, version, "Joy", "Joy", LanguageNames.CSharp, metadataReferences: References);
-            Ws.AddProject(projectInfo);
-            var docId = Ws.AddDocument(id, App.Args[0], SourceCodeKind.Regular);
+            foreach (var sourceFile in SourceFiles) {
+                ws.AddDocument(projectId, sourceFile, SourceCodeKind.Regular);
+            }
 
-            Compilation = Ws.CurrentSolution.Projects.First().GetCompilationAsync().Result;
+            return ws;
+        }
+
+        public void Compile()
+        {
+            var ws = AdhocWorkspace();
+
+            Compilation = ws.CurrentSolution.Projects.First().GetCompilationAsync().Result;
 
             using (var ms = new MemoryStream())
             {
@@ -133,12 +251,12 @@ namespace VimHelper
             }   
         }       
 
-        public void FindSymbolAtOffset(string path, int offset)
+        public Symbol FindSymbolAtOffset(OmniSharpWorkspace ws, string path, int offset)
         {
-            var doc = Ws.GetDocument(path);
+            var doc = ws.GetDocument(path);
             var model = doc.GetSemanticModelAsync().Result;
 
-            var symbol = Microsoft.CodeAnalysis.FindSymbols.SymbolFinder.FindSymbolAtPositionAsync(model, offset, Ws).Result;
+            var symbol = Microsoft.CodeAnalysis.FindSymbols.SymbolFinder.FindSymbolAtPositionAsync(model, offset, ws).Result;
 
             ITypeSymbol type;
 
@@ -161,51 +279,26 @@ namespace VimHelper
                 typeName = needCompletions.Name;
             }
 
-            Console.WriteLine($"Looking Up: {typeName}");
+            App.Log($"Looking Up: {typeName} {needCompletions.ContainingAssembly.ToDisplayString()} [{symbol.Name}]");
 
-            var t = Type.GetType(
-                $"{typeName}, {needCompletions.ContainingAssembly.ToDisplayString()}",
-                (name) => 
-                {
+            return new Symbol() {
+                SymbolName = symbol.Name,
+                AssemblyName = new AssemblyName(needCompletions.ContainingAssembly.ToDisplayString()),
+                TypeName = typeName,
+            };
+
+        }
+
+        public Type GetSymbolType(Symbol symbol)
+        {
+            return Type.GetType(
+                $"{symbol.TypeName}, {symbol.AssemblyName}",
+                (name) =>  {
                     return Assemblies.Where(z => z.FullName == name.FullName).FirstOrDefault();
                 },
-                (assembly, name, ignore) =>
-                {
+                (assembly, name, ignore) => {
                     return assembly.GetTypes().Where(z => z.Name == name).First();
-                }, 
-                true);
-
-            var orm = OrmLiteConnectionFactory.NamedConnections["Code"];
-
-            using (var db = orm.OpenDbConnectionString($"Data Source={App.CodeDb};")) {
-                var codeFile = db.Single<CodeFileTable>(x => x.Path == App.Args[0]) ?? new CodeFileTable() { Path = App.Args[0] };
-
-                var (staticProperties, staticMethods) = GatherStatic(t);
-                var properties = GatherProperties(t);
-                var methods = GatherMethods(t);
-
-                if (0 == codeFile.Id) {
-                    codeFile.Id = db.Insert<CodeFileTable>(codeFile);
-                }
-
-                // Should we use transactions?  It's merely a cache
-                db.Delete<OffsetTable>(p => p.CodeFileId == codeFile.Id);
-
-                var data = new IEnumerable<object>[] { staticProperties, staticMethods, properties, methods  };
-
-                foreach (var enumerable in data) {
-                    foreach (var datum in enumerable) {
-
-                        var json = JsonSerializer.SerializeToString<object>(datum);
-                        
-                        db.Save(new OffsetTable() {
-                            Idx = offset,
-                            CodeFileId  = codeFile.Id,
-                            TypesAndThings = json,
-                        });
-                    }
-                }
-            }
+                }, true);
         }
 
         public (List<OffsetProperty>, List<OffsetMethod>) GatherStatic(Type type) {
@@ -279,22 +372,7 @@ namespace VimHelper
             }
 
             return methods;
-        }        
-
-        public static Assembly CurrentDomain_AssemblyResolve(object sender, ResolveEventArgs args)
-        {
-            // Ignore missing resources
-            if (args.Name.Contains(".resources"))
-                return null;                
-
-            // check for assemblies already loaded
-            Assembly assembly = AppDomain.CurrentDomain.GetAssemblies().FirstOrDefault(a => a.FullName == args.Name);
-            if (assembly != null)
-                return assembly;
-
-            // Maybe in the future we can load on the fly
-            return null;
-        }                 
+        }                    
     }
 
     // Gogo gadget copy 'n paste from https://github.com/OmniSharp/omnisharp-roslyn
