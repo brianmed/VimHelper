@@ -55,7 +55,7 @@ namespace VimHelper
             [CallerMemberName] string member = "",
             [CallerLineNumber] int line = 0)
         {
-            Console.WriteLine("{0}_{1}({2}): {3}", Path.GetFileName(file), member, line, obj.ToString());
+            Console.WriteLine("{0}_{1}({2}): {3}", Path.GetFileName(file), member, line, obj?.ToString());
         }   
 
         public static Project Project;
@@ -65,8 +65,6 @@ namespace VimHelper
     {
         static void Main(string[] args)
         {
-            // App.Log($"{System.DateTime.Now.ToString("yyyy-MM-ddTHH:mm:ss.fff")}");
-
             App.Initialize();        
 
             App.Project = new Project();
@@ -79,8 +77,6 @@ namespace VimHelper
             // project.AllLocalVariables();
 
             SocketServer.Run();
-
-            // App.Log($"{System.DateTime.Now.ToString("yyyy-MM-ddTHH:mm:ss.fff")}");                
         }
     }
 }
