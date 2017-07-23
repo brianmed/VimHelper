@@ -30,7 +30,6 @@ using System.Runtime.CompilerServices;
 using ServiceStack.Text;
 using ServiceStack.OrmLite;
 using ServiceStack.DataAnnotations;
-using DbUp;
 
 namespace VimHelper
 {
@@ -84,18 +83,23 @@ namespace VimHelper
             }
         }            
 
-        public void LoadAssemblyWithReferenced(string fullName)
+        public void LoadAssemblyWithReferenced(string fullName, string path = null)
         {
+            // Eww
             try {
                 if (Assemblies.Any(a => Regex.IsMatch(fullName, $"^{a.GetName().Name},"))) {
                     return;
                 }
                 
-                Assemblies.Add(Assembly.Load(fullName));
+                if (null == path) {
+                    Assemblies.Add(Assembly.Load(fullName));
+                } else {
+                    Assemblies.Add(Assembly.LoadFile($"{Environment.GetEnvironmentVariable("HOME")}/.nuget/packages/{path}"));
+                }
 
-                // Console.WriteLine($"Loaded: {assemblies.Last().FullName}");
-            } catch (Exception ex) {                    
-                // Console.WriteLine($"Warning loading: {fullName}: {ex.Message}");
+                // Console.WriteLine($"Loaded: {Assemblies.Last().FullName}");
+            } catch (Exception ex) {   
+                // Console.WriteLine(ex.Message);
 
                 return;
             }
@@ -171,75 +175,110 @@ namespace VimHelper
                 }, 
                 true);
 
-            var codeFile = new CodeFileTable {
-                Path = App.Args[0],
-            };
+            var orm = OrmLiteConnectionFactory.NamedConnections["Code"];
 
-            ShowStatic(t);
-            ShowProperties(t);
-            ShowMethods(t);
+            using (var db = orm.OpenDbConnectionString($"Data Source={App.CodeDb};")) {
+                var codeFile = db.Single<CodeFileTable>(x => x.Path == App.Args[0]) ?? new CodeFileTable() { Path = App.Args[0] };
+
+                var (staticProperties, staticMethods) = GatherStatic(t);
+                var properties = GatherProperties(t);
+                var methods = GatherMethods(t);
+
+                if (0 == codeFile.Id) {
+                    codeFile.Id = db.Insert<CodeFileTable>(codeFile);
+                }
+
+                // Should we use transactions?  It's merely a cache
+                db.Delete<OffsetTable>(p => p.CodeFileId == codeFile.Id);
+
+                var data = new IEnumerable<object>[] { staticProperties, staticMethods, properties, methods  };
+
+                foreach (var enumerable in data) {
+                    foreach (var datum in enumerable) {
+
+                        var json = JsonSerializer.SerializeToString<object>(datum);
+                        
+                        db.Save(new OffsetTable() {
+                            Idx = offset,
+                            CodeFileId  = codeFile.Id,
+                            TypesAndThings = json,
+                        });
+                    }
+                }
+            }
         }
 
-        public class FieldOrProperty
-        {
-            public bool IsStatic { get; set; }
+        public (List<OffsetProperty>, List<OffsetMethod>) GatherStatic(Type type) {
+            var properties = new List<OffsetProperty>();
+            var methods = new List<OffsetMethod>();
 
-            public string ReturnType { get; set; }
-
-            public string Name { get; set; }
-        }
-
-        public class Method
-        {
-            public bool IsStatic { get; set; }
-
-            public string ReturnType { get; set; }
-
-            public string[] Parameters { get; set; }
-
-            public string Name { get; set; }
-        }
-
-        public void ShowStatic(Type type) {
-            foreach (var s in type.GetFields(BindingFlags.Static | BindingFlags.Public)) {
-                Console.WriteLine($"{s.FieldType} {s.Name}");
+            foreach (var s in type.GetFields(BindingFlags.Static | BindingFlags.Public)) {        
+                properties.Add(new OffsetProperty{
+                    IsStatic = true,
+                    PropertyType = s.FieldType.ToString(),
+                    Name = s.Name
+                });
             }
 
             foreach (var method in type.GetMethods(BindingFlags.Static | BindingFlags.Public)) {
-                var parameters = method.GetParameters();
-                var parameterDescriptions = string.Join
-                    (", ", method.GetParameters()
-                                .Select(x => x.ParameterType + " " + x.Name)
-                                .ToArray());
+                var parameters = new List<OffsetParamter>();
 
-                Console.WriteLine("{0} {1} ({2})",
-                                method.ReturnType,
-                                method.Name,
-                                parameterDescriptions);
-            }            
+                foreach (var parameter in method.GetParameters()) {
+                    parameters.Add(new OffsetParamter{
+                        Name = parameter.Name,
+                        TypeName = parameter.ParameterType.ToString(),
+                    });
+                }
+
+                methods.Add(new OffsetMethod {
+                    IsStatic = true,
+                    Name = method.Name,
+                    ReturnType = method.ReturnType.ToString(),
+                    Parameters = parameters.ToArray(),
+                });            
+            }      
+
+            return (properties, methods);      
         }
 
-        public void ShowProperties(Type type) {
-            foreach (var p in type.GetProperties()) {
-                Console.WriteLine($"{p.PropertyType} {p.Name}");
+        public List<OffsetProperty> GatherProperties(Type type) {
+            var properties = new List<OffsetProperty>();
+
+            foreach (var p in type.GetProperties(BindingFlags.Public)) {
+                properties.Add(new OffsetProperty{
+                    IsStatic = true,
+                    PropertyType = p.PropertyType.ToString(),
+                    Name = p.Name
+                });                
             }
+
+            return properties;
         }
 
-        public void ShowMethods(Type type)
+        public List<OffsetMethod> GatherMethods(Type type)
         {
+            var methods = new List<OffsetMethod>();
+
             foreach (var method in type.GetMethods(BindingFlags.Public))
             {
-                var parameters = method.GetParameters();
-                var parameterDescriptions = string.Join
-                    (", ", method.GetParameters()
-                                .Select(x => x.ParameterType + " " + x.Name)
-                                .ToArray());
+                var parameters = new List<OffsetParamter>();
 
-                Console.WriteLine("{0} {1} ({2})",
-                                method.ReturnType,
-                                method.Name,
-                                parameterDescriptions);
+                foreach (var parameter in method.GetParameters()) {
+                    parameters.Add(new OffsetParamter{
+                        Name = parameter.Name,
+                        TypeName = parameter.ParameterType.ToString(),
+                    });
+                }
+
+                methods.Add(new OffsetMethod {
+                    IsStatic = true,
+                    Name = method.Name,
+                    ReturnType = method.ReturnType.ToString(),
+                    Parameters = parameters.ToArray(),
+                });                            
             }
+
+            return methods;
         }        
 
         public static Assembly CurrentDomain_AssemblyResolve(object sender, ResolveEventArgs args)

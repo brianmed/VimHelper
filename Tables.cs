@@ -5,6 +5,33 @@ using ServiceStack.DataAnnotations;
 
 namespace VimHelper
 {
+    public class OffsetProperty
+    {
+        public bool IsStatic { get; set; }
+
+        public string PropertyType { get; set; }
+
+        public string Name { get; set; }
+    }
+
+    public class OffsetParamter
+    {
+        public string Name { get; set; }
+
+        public string TypeName { get; set; }
+    }
+
+    public class OffsetMethod
+    {
+        public bool IsStatic { get; set; }
+
+        public string ReturnType { get; set; }
+
+        public OffsetParamter[] Parameters { get; set; }
+
+        public string Name { get; set; }
+    }
+
     [Alias("code_file")]
     public class CodeFileTable
     {
@@ -30,6 +57,9 @@ namespace VimHelper
         [Alias("offset_id")]
         public long Id { get; set; }
         
+        [Alias("offset_idx")]
+        public int Idx { get; set; }
+
       	[ForeignKey(typeof(CodeFileTable), OnDelete = "CASCADE", OnUpdate = "CASCADE")]
         [Alias("offset_code_file_id")]
         public long CodeFileId { get; set; }

@@ -10,24 +10,17 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.Data.SQLite" Version="*" />
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="2.0.0-preview2-final" />
     <PackageReference Include="Microsoft.Extensions.PlatformAbstractions" Version="1.1.0" />
     <PackageReference Include="Microsoft.CodeAnalysis" Version="2.3.0" />
     <PackageReference Include="Microsoft.CodeAnalysis.Scripting" Version="2.3.0" />
     <PackageReference Include="Microsoft.Extensions.Configuration" Version="1.1.2" />
     <PackageReference Include="ServiceStack.Text.Core" Version="1.0.43" />
-    <PackageReference Include="ServiceStack.OrmLite.Core" Version="1.0.43" />
     <PackageReference Include="ServiceStack.OrmLite.Sqlite.Core" Version="1.0.43" />
-    <PackageReference Include="DbUp4-SQLite" Version="4.0.0-beta0003" />
-    <PackageReference Include="DbUp4-core" Version="4.0.0-beta0003" />
   </ItemGroup>
 
   <ItemGroup>
     <DotNetCliToolReference Include="Microsoft.DotNet.Watcher.Tools" Version="2.0.0-preview2-final" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <EmbeddedResource Include="SQL/CodeDb0000.SQL" />
   </ItemGroup>
 
   <Target Name="BuildTimeStampTarget" BeforeTargets="Compile">
