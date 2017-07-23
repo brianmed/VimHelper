@@ -46,7 +46,6 @@ namespace VimHelper
             App.BasePath = PlatformServices.Default.Application.ApplicationBasePath; 
             App.Name = PlatformServices.Default.Application.ApplicationName;      
             App.Version  = PlatformServices.Default.Application.ApplicationVersion; 
-            App.BuildDate = File.ReadAllLines(Path.Combine(App.BasePath, "TimeBuilt.txt")).First();
 
             App.BaseDataDir = App.BasePath;
         }
@@ -71,7 +70,7 @@ namespace VimHelper
             App.Initialize();        
 
             App.Project = new Project();
-            
+
             App.Project.AddDocument(args[1]);                    
 
             App.Project.ProcessDepsFile(args[0]);
