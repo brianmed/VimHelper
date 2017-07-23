@@ -31,7 +31,6 @@ using ServiceStack.Text;
 using ServiceStack.OrmLite;
 using ServiceStack.OrmLite.Sqlite;
 using ServiceStack.DataAnnotations;
-using DbUp;
 
 namespace VimHelper
 {
@@ -57,7 +56,6 @@ namespace VimHelper
 
         public static void Initialize()
         {
-            ///
             App.BasePath = PlatformServices.Default.Application.ApplicationBasePath; 
             App.Name = PlatformServices.Default.Application.ApplicationName;      
             App.Version  = PlatformServices.Default.Application.ApplicationVersion; 
@@ -68,8 +66,7 @@ namespace VimHelper
             OrmLiteConfig.DialectProvider = SqliteOrmLiteDialectProvider.Instance;
             App.DbFactory = new OrmLiteConnectionFactory();
 
-            App.DbFactory.RegisterConnection("Code",
-                new OrmLiteConnectionFactory($"Data Source={App.CodeDb};"));        
+            App.DbFactory.RegisterConnection("Code", new OrmLiteConnectionFactory($"Data Source={App.CodeDb};"));
         }
 
         public static void Log(object obj,
@@ -87,27 +84,15 @@ namespace VimHelper
     {
         public static void Run()
         {
-            var connections = new List<Tuple<string, string>>() {
-                    new Tuple<string, string>( $"Data Source={App.CodeDb};", "CodeDb" ),
-            };
+            var orm = OrmLiteConnectionFactory.NamedConnections["Code"];
+            using (var db = orm.OpenDbConnectionString($"Data Source={App.CodeDb};")) {
+                foreach (var sql in Sql.CodeDb) {
+                    using (var dbTrans = db.OpenTransaction()) {
+                        db.ExecuteSql(sql);
 
-            foreach (var connection in connections) {
-                var upgrader = DeployChanges.To
-                    .SQLiteDatabase(connection.Item1)
-                    .WithScriptsEmbeddedInAssemblies(new[]
-                    {
-                        Assembly.GetExecutingAssembly(),
-                    },
-                    (string s) => s.StartsWith(connection.Item2))
-                    .WithTransaction()
-                    .Build();
-
-                DbUp.Engine.DatabaseUpgradeResult result = upgrader.PerformUpgrade();
-
-                if (false == result.Successful) {
-                    App.Log(result.Error);
-                    System.Environment.Exit(1);
-                }
+                        dbTrans.Commit();
+                    }
+                }                        
             }
         }
     }
@@ -129,6 +114,7 @@ namespace VimHelper
 
                 var targets = JsonObject.Parse(assets.Child("targets"));
                 var assemblyFullNames = new Dictionary<string, string>();
+                var assemblyFileNames = new Dictionary<string, string>();
 
                 var libraries = JsonObject.Parse(assets.Child("libraries"));
 
@@ -137,8 +123,9 @@ namespace VimHelper
 
                     var things = JsonObject.Parse(target.Value);
                     foreach (var thing in things) {
+                        var blobs = JsonObject.Parse(thing.Value);
                         // System.Private.CoreLib, Version=4.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e
-                        foreach (var blob in JsonObject.Parse(thing.Value)) {
+                        foreach (var blob in blobs) {
                             if ("dependencies" == blob.Key) {
                                 foreach (var deps in JsonObject.Parse(blob.Value)) {                                    
                                     var libKey = $"{deps.Key}/{deps.Value}";
@@ -151,6 +138,14 @@ namespace VimHelper
                                         continue;
                                     }
 
+                                    if (blobs.Keys.Contains("runtime")) {
+                                        var runtime = JsonObject.Parse(blobs.Child("runtime"));
+                                        
+                                        var path = $"{thing.Key}/{runtime.First().Key}";
+
+                                        assemblyFileNames.Add(libKey, path);
+                                    }
+
                                     // Console.WriteLine(libKey);
 
                                     var assemblyName = new AssemblyName();
@@ -160,7 +155,7 @@ namespace VimHelper
                                     assemblyName.Version = Version.Parse(String.Join(".", version.ToArray()));
 
                                     if (libraries.Keys.Contains(libKey)) {                                        
-                                        // foundAssemblies.Add(libKey, $"{deps.Key}, Version={String.Join('.', version)}, Culture=neutral, PublicKeyToken=null");
+                                        // assemblyFullNames.Add(libKey, $"{deps.Key}, Version={String.Join('.', version)}, Culture=neutral, PublicKeyToken=null");
                                         assemblyFullNames.Add(libKey, $"{deps.Key}, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null");
                                     }
                                 }
@@ -169,7 +164,11 @@ namespace VimHelper
                     }
 
                     foreach (var fullName in assemblyFullNames.OrderBy(v => v.Key)) {
-                        project.LoadAssemblyWithReferenced(fullName.Value);
+                        if (assemblyFileNames.ContainsKey(fullName.Key)) {
+                            project.LoadAssemblyWithReferenced(fullName.Value, assemblyFileNames[fullName.Key]);
+                        } else {
+                            project.LoadAssemblyWithReferenced(fullName.Value);
+                        }                        
 
                         project.LoadAssemblyWithReferenced("System, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null");
                         project.LoadAssemblyWithReferenced("System.Console, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null");
