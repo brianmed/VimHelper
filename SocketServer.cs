@@ -24,7 +24,7 @@ namespace VimHelper
         {
             Task.Run(async () => {
                 Socket socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
-                socket.Bind(new IPEndPoint(IPAddress.Loopback, 12345));
+                socket.Bind(new IPEndPoint(IPAddress.Loopback, 5555));
                 socket.Listen(5);        
                 
                 App.Log($"Listening at port {((IPEndPoint)socket.LocalEndPoint).Port}");
@@ -52,9 +52,14 @@ namespace VimHelper
                 using(var stream = new NetworkStream(socket))
                 using(var reader = new StreamReader(stream, Encoding.UTF8))
                 while (0 == ReleaseForExit.CurrentCount) {
-                    var text = await reader.ReadLineAsync();
+                    var raw = await reader.ReadLineAsync();
+                    if (String.IsNullOrWhiteSpace(raw)) {
+                        continue;
+                    }                    
+                    // App.Log(raw);
 
-                    var pieces = text.Split(',');
+                    var pieces = JsonSerializer.DeserializeFromString<string[]>(raw);
+                    // App.Log(pieces[1]);
                     
                     var ws = App.Project.AdhocWorkspace();
                     var symbol = App.Project.FindSymbolAtOffset(ws, pieces[0], Int32.Parse(pieces[1]));
@@ -75,6 +80,8 @@ namespace VimHelper
                     };
 
                     socket.Send(Encoding.UTF8.GetBytes(JsonSerializer.SerializeToString<OffsetReturn>(infoTainment)));
+                    socket.Send(Encoding.UTF8.GetBytes("\n"));
+                    // App.Log(JsonSerializer.SerializeToString<OffsetReturn>(infoTainment));
                 }
             } catch (Exception x) {
                 App.Log($"Error while processing connection: {x}");

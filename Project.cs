@@ -279,7 +279,7 @@ namespace VimHelper
             } else if (symbol is ITypeSymbol) {
                 type = symbol as ITypeSymbol;
             } else {
-                throw new Exception($"Unsupported symbol at offset {offset}");
+                throw new Exception($"Unsupported symbol at offset {offset} [{symbol?.Name}]");
             }
 
             var needCompletions = type;     
@@ -290,7 +290,7 @@ namespace VimHelper
                 typeName = needCompletions.Name;
             }
 
-            App.Log($"Looking Up: {typeName} {needCompletions.ContainingAssembly.ToDisplayString()} [{symbol.Name}]");
+            App.Log($"Looking Up: {typeName} {needCompletions.ContainingAssembly.ToDisplayString()} {offset} [{symbol.Name}]");
 
             return new Symbol() {
                 SymbolName = symbol.Name,
