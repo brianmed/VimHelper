@@ -246,8 +246,6 @@ namespace VimHelper
                 if (false == result.Success) {
                     throw new Exception(String.Join("\n", result.Diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error)));
                 }
-
-                Assembly.Load(ms.ToArray()); 
             }   
         }       
 

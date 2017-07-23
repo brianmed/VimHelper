@@ -57,6 +57,8 @@ namespace VimHelper
                     var ws = App.Project.AdhocWorkspace();
                     var symbol = App.Project.FindSymbolAtOffset(ws, pieces[0], Int32.Parse(pieces[1]));
 
+                    socket.Send(Encoding.UTF8.GetBytes($"{symbol.AssemblyName} :: {symbol.SymbolName} :: {symbol.TypeName}"));
+                    
                     App.Log($"{symbol.AssemblyName} :: {symbol.SymbolName} :: {symbol.TypeName}");
                 }
             } catch (Exception x) {
