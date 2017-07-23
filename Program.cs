@@ -71,7 +71,9 @@ namespace VimHelper
             App.Initialize();        
 
             App.Project = new Project();
+            
             App.Project.AddDocument(args[1]);                    
+
             App.Project.ProcessDepsFile(args[0]);
             App.Project.PopulateReferences();
             App.Project.Compile();

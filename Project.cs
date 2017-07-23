@@ -199,7 +199,9 @@ namespace VimHelper
                 if (null == path) {
                     Assemblies.Add(Assembly.Load(fullName));
                 } else {
-                    Assemblies.Add(Assembly.LoadFile($"{Environment.GetEnvironmentVariable("HOME")}/.nuget/packages/{path}"));
+                    var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+
+                    Assemblies.Add(Assembly.LoadFile(Path.Combine(home, ".nuget", "packages", path)));
                 }
 
                 // Console.WriteLine($"Loaded: {Assemblies.Last().FullName}");
