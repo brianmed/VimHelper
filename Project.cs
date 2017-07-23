@@ -40,6 +40,17 @@ namespace VimHelper
         public AssemblyName AssemblyName { get; set; }
     }
 
+    public class OffsetReturn
+    {
+        public List<OffsetProperty> StaticProperties { get; set; }
+
+        public List<OffsetMethod> StaticMethods { get; set; }
+
+        public List<OffsetProperty> Properties { get; set; }
+
+        public List<OffsetMethod> Methods { get; set; }
+    }
+
     public class OffsetProperty
     {
         public bool IsStatic { get; set; }
@@ -298,14 +309,15 @@ namespace VimHelper
                 },
                 (assembly, name, ignore) => {
                     return assembly.GetTypes().Where(z => z.Name == name).First();
-                }, true);
+                }, true
+            );
         }
 
         public (List<OffsetProperty>, List<OffsetMethod>) GatherStatic(Type type) {
             var properties = new List<OffsetProperty>();
             var methods = new List<OffsetMethod>();
 
-            foreach (var s in type.GetFields(BindingFlags.Static | BindingFlags.Public)) {        
+            foreach (var s in type.GetFields(BindingFlags.Static)) {        
                 properties.Add(new OffsetProperty{
                     IsStatic = true,
                     PropertyType = s.FieldType.ToString(),
@@ -313,7 +325,7 @@ namespace VimHelper
                 });
             }
 
-            foreach (var method in type.GetMethods(BindingFlags.Static | BindingFlags.Public)) {
+            foreach (var method in type.GetMethods(BindingFlags.Static)) {
                 var parameters = new List<OffsetParamter>();
 
                 foreach (var parameter in method.GetParameters()) {
@@ -337,7 +349,7 @@ namespace VimHelper
         public List<OffsetProperty> GatherProperties(Type type) {
             var properties = new List<OffsetProperty>();
 
-            foreach (var p in type.GetProperties(BindingFlags.Public)) {
+            foreach (var p in type.GetProperties()) {
                 properties.Add(new OffsetProperty{
                     IsStatic = true,
                     PropertyType = p.PropertyType.ToString(),
@@ -352,7 +364,7 @@ namespace VimHelper
         {
             var methods = new List<OffsetMethod>();
 
-            foreach (var method in type.GetMethods(BindingFlags.Public))
+            foreach (var method in type.GetMethods())
             {
                 var parameters = new List<OffsetParamter>();
 

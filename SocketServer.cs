@@ -12,6 +12,8 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Linq;
 
+using ServiceStack.Text;
+
 namespace VimHelper
 {
     class SocketServer
@@ -56,10 +58,23 @@ namespace VimHelper
                     
                     var ws = App.Project.AdhocWorkspace();
                     var symbol = App.Project.FindSymbolAtOffset(ws, pieces[0], Int32.Parse(pieces[1]));
-
-                    socket.Send(Encoding.UTF8.GetBytes($"{symbol.AssemblyName} :: {symbol.SymbolName} :: {symbol.TypeName}"));
-                    
                     App.Log($"{symbol.AssemblyName} :: {symbol.SymbolName} :: {symbol.TypeName}");
+
+                    var type = App.Project.GetSymbolType(symbol);
+                    App.Log($"{type.FullName}");
+
+                    var (staticProperties, staticMethods) = App.Project.GatherStatic(type);
+                    var properties = App.Project.GatherProperties(type);
+                    var methods = App.Project.GatherMethods(type);
+
+                    var infoTainment = new OffsetReturn() {
+                        StaticProperties = staticProperties,
+                        StaticMethods = staticMethods,
+                        Properties = properties,
+                        Methods = methods,
+                    };
+
+                    socket.Send(Encoding.UTF8.GetBytes(JsonSerializer.SerializeToString<OffsetReturn>(infoTainment)));
                 }
             } catch (Exception x) {
                 App.Log($"Error while processing connection: {x}");
