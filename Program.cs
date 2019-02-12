@@ -85,8 +85,6 @@ namespace VimHelper
 				App.Project.AllClassFields(ws, file);
 				App.Project.AllLocalVariables(ws, file);
 			}
-
-            // SocketServer.Run();
         }
     }
 }
