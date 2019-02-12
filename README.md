@@ -1,5 +1,9 @@
 # VimHelper
 
+### Beta
+
+This is a command line app that can create a ctag file from C# code.
+
 ## Running
 
 ``` bash
