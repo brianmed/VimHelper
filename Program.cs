@@ -55,7 +55,7 @@ namespace VimHelper
             [CallerMemberName] string member = "",
             [CallerLineNumber] int line = 0)
         {
-            Console.WriteLine("{0}_{1}({2}): {3}", Path.GetFileName(file), member, line, obj?.ToString());
+            Console.Error.WriteLine("{0}_{1}({2}): {3}", Path.GetFileName(file), member, line, obj?.ToString());
         }   
 
         public static Project Project;
@@ -68,15 +68,25 @@ namespace VimHelper
             App.Initialize();        
 
             App.Project = new Project();
+        
+            foreach (var file in args.Skip(2).ToArray()) {
+                App.Project.AddDocument(file);                    
+            }
 
-            App.Project.AddDocument(args[1]);                    
-
-            App.Project.ProcessDepsFile(args[0]);
+            App.Project.ProcessDepsFile(args[0].Split(':').ToList(), args[1]);
             App.Project.PopulateReferences();
             App.Project.Compile();
-            // project.AllLocalVariables();
 
-            SocketServer.Run();
+            var ws = App.Project.AdhocWorkspace();
+
+			foreach (var file in args.Skip(2).ToList()) {
+				App.Project.AllClasses(ws, file);
+				App.Project.AllClassMethods(ws, file);
+				App.Project.AllClassFields(ws, file);
+				App.Project.AllLocalVariables(ws, file);
+			}
+
+            // SocketServer.Run();
         }
     }
 }

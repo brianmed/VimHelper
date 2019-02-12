@@ -103,6 +103,64 @@ namespace VimHelper
                 .Distinct()
                 .Select(l => MetadataReference.CreateFromFile(l));
         }
+
+        public void AllClasses(OmniSharpWorkspace ws, string sourceFile)
+        {
+            var doc = ws.GetDocument(sourceFile);
+            var tree = doc.GetSyntaxTreeAsync().Result;
+            var model = doc.GetSemanticModelAsync().Result;
+            
+            foreach (var c in tree.GetRoot().DescendantNodes().OfType<ClassDeclarationSyntax>()) {                
+                // Console.WriteLine(c.Identifier.Text);
+				var fieldSymbol = model.GetDeclaredSymbol(c);
+
+				foreach (var l in fieldSymbol.Locations) {
+                    // Console.WriteLine(l);
+					FindSymbolAtOffset(ws, sourceFile, l.SourceSpan.Start);
+				}
+            }
+        }
+
+        public void AllClassFields(OmniSharpWorkspace ws, string sourceFile)
+        {
+            var doc = ws.GetDocument(sourceFile);
+            var tree = doc.GetSyntaxTreeAsync().Result;
+            var model = doc.GetSemanticModelAsync().Result;
+            
+            foreach (var c in tree.GetRoot().DescendantNodes().OfType<ClassDeclarationSyntax>()) {                
+                foreach (var f in c.DescendantNodes().OfType<FieldDeclarationSyntax>()) {
+					foreach (var v in f.Declaration.Variables)
+					{
+						var fieldSymbol = model.GetDeclaredSymbol(v);
+
+						foreach (var l in fieldSymbol.Locations) {
+							FindSymbolAtOffset(ws, sourceFile, l.SourceSpan.Start);
+						}
+
+                        // Console.WriteLine($"{v.SourceSpan.Start} {v.ToString()}");
+                    	// Console.WriteLine($"{v.Identifier.SpanStart} - {v.Identifier.Text}");
+					}
+                }
+            }
+        }
+
+        public void AllClassMethods(OmniSharpWorkspace ws, string sourceFile)
+        {
+            var doc = ws.GetDocument(sourceFile);
+            var tree = doc.GetSyntaxTreeAsync().Result;
+            var model = doc.GetSemanticModelAsync().Result;
+            
+            foreach (var c in tree.GetRoot().DescendantNodes().OfType<ClassDeclarationSyntax>()) {                
+                foreach (var m in c.DescendantNodes().OfType<MethodDeclarationSyntax>()) {
+                    var fieldSymbol = model.GetDeclaredSymbol(m);
+
+                    FindSymbolAtOffset(ws, sourceFile, m.Identifier.SpanStart);
+
+                    // Console.WriteLine($"{v.SourceSpan.Start} {v.ToString()}");
+                    // Console.WriteLine($"{v.Identifier.SpanStart} - {v.Identifier.Text}");
+                }
+            }
+        }
         
         public void AllLocalVariables(OmniSharpWorkspace ws, string sourceFile)        
         {
@@ -127,79 +185,38 @@ namespace VimHelper
             }
         }            
 
-        public void ProcessDepsFile(string depsFile)
+        public void ProcessDepsFile(List<string> depSearchPath, string depsFile)
         {
             var assets = JsonObject.Parse(File.ReadAllText(depsFile));
 
             var targets = JsonObject.Parse(assets.Child("targets"));
             var assemblyFullNames = new Dictionary<string, string>();
-            var assemblyFileNames = new Dictionary<string, string>();
 
             var libraries = JsonObject.Parse(assets.Child("libraries"));
 
             foreach (var target in targets) {
-                // Console.WriteLine(target.Key);
-
-                var things = JsonObject.Parse(target.Value);
-                foreach (var thing in things) {
-                    var blobs = JsonObject.Parse(thing.Value);
-                    // System.Private.CoreLib, Version=4.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e
-                    foreach (var blob in blobs) {
-                        if ("dependencies" == blob.Key) {
-                            foreach (var deps in JsonObject.Parse(blob.Value)) {                                    
-                                var libKey = $"{deps.Key}/{deps.Value}";
-                            
-                                if ("{}" == things.Child(libKey)) {
-                                    continue;
-                                }
-
-                                if (assemblyFullNames.ContainsKey(libKey)) {
-                                    continue;
-                                }
-
-                                if (blobs.Keys.Contains("runtime")) {
-                                    var runtime = JsonObject.Parse(blobs.Child("runtime"));
-                                    
-                                    var path = $"{thing.Key}/{runtime.First().Key}";
-
-                                    assemblyFileNames.Add(libKey, path);
-                                }
-
-                                // Console.WriteLine(libKey);
-
-                                var assemblyName = new AssemblyName();
-                                assemblyName.Name = deps.Key;
-
-                                var version = (deps.Value.Contains('-') ? deps.Value.Split('-')[0] : deps.Value).Split('.').ToList();
-                                assemblyName.Version = Version.Parse(String.Join(".", version.ToArray()));
-
-                                if (libraries.Keys.Contains(libKey)) {                                        
-                                    // assemblyFullNames.Add(libKey, $"{deps.Key}, Version={String.Join('.', version)}, Culture=neutral, PublicKeyToken=null");
-                                    assemblyFullNames.Add(libKey, $"{deps.Key}, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null");
-                                }
-                            }
-                        }
+                var names = JsonObject.Parse(target.Value);
+                foreach (var name in names) {
+                    if (!assemblyFullNames.ContainsKey(name.Key)) {
+                        assemblyFullNames.Add(name.Key, $"{name.Key.Substring(0, name.Key.IndexOf('/'))}, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null");
                     }
                 }
 
                 foreach (var fullName in assemblyFullNames.OrderBy(v => v.Key)) {
-                    if (assemblyFileNames.ContainsKey(fullName.Key)) {
-                        App.Project.LoadAssemblyWithReferenced(fullName.Value, assemblyFileNames[fullName.Key]);
-                    } else {
-                        App.Project.LoadAssemblyWithReferenced(fullName.Value);
-                    }                        
-
-                    App.Project.LoadAssemblyWithReferenced("System, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null");
-                    App.Project.LoadAssemblyWithReferenced("System.Console, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null");
+                    App.Project.LoadAssemblyWithReferenced(fullName.Value);
+                    App.Project.LoadAssemblyWithReferenced($"{fullName.Key.Substring(0, fullName.Key.IndexOf('/'))}.dll", depSearchPath);
                 }
+
+                App.Project.LoadAssemblyWithReferenced("System, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null");
+                App.Project.LoadAssemblyWithReferenced("System.Console, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null");
 
                 // For base stuff, I believe (maybe unnecessary)
                 App.Project.LoadAssemblyWithReferenced("mscorlib, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null");
                 App.Project.LoadAssemblyWithReferenced((Type.GetType("System.Int32").Assembly.FullName));                    
-            }            
+            }
         }
 
-        public void LoadAssemblyWithReferenced(string fullName, string path = null)
+        public void LoadAssemblyWithReferenced(string fullName, List<string> depSearchPath = null)
         {
             // Eww
             try {
@@ -207,17 +224,31 @@ namespace VimHelper
                     return;
                 }
                 
-                if (null == path) {
+                try {
                     Assemblies.Add(Assembly.Load(fullName));
-                } else {
-                    var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+                } catch {
+                    try {
+                        if (depSearchPath == null) {
+                            throw;
+                        } else {
+                            foreach (var path in depSearchPath) {
+                                try {                                    
+                                    Assemblies.Add(Assembly.LoadFile(Path.Combine(path, fullName)));                                    
+                                } catch {
+                                    continue;
+                                }
 
-                    Assemblies.Add(Assembly.LoadFile(Path.Combine(home, ".nuget", "packages", path)));
-                }
+                                break;
+                            }
+                        }
+                    } catch {
+                        throw;
+                    }
+                }                    
 
-                // Console.WriteLine($"Loaded: {Assemblies.Last().FullName}");
-            } catch (Exception ex) {   
-                // Console.WriteLine(ex.Message);
+                // Console.Error.WriteLine($"Loaded: {fullName}");
+            } catch {   
+                // Console.Error.WriteLine($"Skipped: {fullName}");
 
                 return;
             }
@@ -256,7 +287,7 @@ namespace VimHelper
             {
                 var result = Compilation.Emit(ms);
 
-                if (false == result.Success) {
+                if (!result.Success) {
                     throw new Exception(String.Join("\n", result.Diagnostics.Where(d => d.Severity == DiagnosticSeverity.Error)));
                 }
             }   
@@ -279,7 +310,8 @@ namespace VimHelper
             } else if (symbol is ITypeSymbol) {
                 type = symbol as ITypeSymbol;
             } else {
-                throw new Exception($"Unsupported symbol at offset {offset} [{symbol?.Name}]");
+				type = symbol.ContainingType;
+                // throw new Exception($"Unsupported symbol at offset {offset} [{symbol?.Name}] {symbol.GetType()}");
             }
 
             var needCompletions = type;     
@@ -290,10 +322,11 @@ namespace VimHelper
                 typeName = needCompletions.Name;
             }
 
-            App.Log($"Looking Up: {typeName} {needCompletions.ContainingAssembly.ToDisplayString()} {offset} [{symbol.Name}]");
+			Console.WriteLine($"{symbol.Name}\t{path.Replace(Directory.GetCurrentDirectory(), "").Replace("/", "")}\t:normal {offset}go ;\"");
+            // App.Log($"Looking Up: {typeName} {needCompletions.ContainingAssembly.ToDisplayString()} {offset} [{symbol.Name}]");
 
             return new Symbol() {
-                SymbolName = symbol.Name,
+                SymbolName = symbol.Name, 
                 AssemblyName = new AssemblyName(needCompletions.ContainingAssembly.ToDisplayString()),
                 TypeName = typeName,
             };
